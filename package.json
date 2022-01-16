@@ -2,7 +2,7 @@
   "name": "arbitragoor",
   "version": "0.1.0",
   "author": "Michalis Kargakis",
-  "license": "MIT",
+  "license": "GPL-3.0-only",
   "private": true,
   "engines": {
     "node": "16.x"
