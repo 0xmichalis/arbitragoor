@@ -144,11 +144,12 @@ export const getOptions = async function() {
         return options
     }
 
-    const tip = BigNumber.from(3000000000)
+    // 30 Gwei tip to miners
+    const tip = BigNumber.from(30000000000)
 
     return {
         ...options,
-        maxFeePerGas: gasPrice.add(tip),
+        maxFeePerGas: gasPrice,
         maxPriorityFeePerGas: tip,
     }
 }
