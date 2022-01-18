@@ -3,7 +3,7 @@ import { BigNumber, Contract, ethers, providers, Wallet } from 'ethers'
 import { Contract as MulticallContract, Provider as MulticallProvider } from 'ethers-multicall'
 
 import { config } from './config'
-import { arbitrageCheck, checkReserves, Route } from './helpers'
+import { arbitrageCheck, checkReserves, getOptions, Route } from './helpers'
 
 export default class Arbitragoor {
     // RPC providers
@@ -210,6 +210,7 @@ export default class Arbitragoor {
 
                 // TODO: Sum gas costs with net result to ensure we are
                 // still profitable
+                const options = await getOptions()
 
                 // Execute flasloan request
                 const tx = await this.loaner.flashloan(
@@ -219,6 +220,7 @@ export default class Arbitragoor {
                     path1,
                     path0Router,
                     path1Router,
+                    options
                 )
                 await tx.wait()
 

@@ -1,4 +1,5 @@
-import { BigNumber } from 'ethers'
+import axios from 'axios'
+import { BigNumber, ethers, utils } from 'ethers'
 
 import { config } from './config'
 
@@ -122,5 +123,32 @@ export const arbitrageCheck = function(routes: Route[], debt: BigNumber): Result
             routes[0].path[1],
             routes[0].path[0],
         ]
+    }
+}
+
+export const getOptions = async function() {
+    let gasPrice: BigNumber
+    const options = {
+        gasLimit: BigNumber.from(650000),
+    }
+
+    try {
+        const gasOracleUrl = config.get('GAS_ORACLE_URL')
+        if (!gasOracleUrl) {
+            return options
+        }
+        const resp = await axios.get(gasOracleUrl)
+        gasPrice = utils.parseUnits(resp.data.result.FastGasPrice, 'gwei')
+    } catch (e) {
+        console.log(`Failed to get gas price from oracle, tx will use ethers defaults: ${e.message}`)
+        return options
+    }
+
+    const tip = BigNumber.from(3000000000)
+
+    return {
+        ...options,
+        maxFeePerGas: gasPrice.add(tip),
+        maxPriorityFeePerGas: tip,
     }
 }

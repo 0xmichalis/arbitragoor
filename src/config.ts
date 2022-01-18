@@ -3,6 +3,7 @@ import Joi from 'joi'
 
 
 const applicationConfigSchema: Joi.ObjectSchema = Joi.object({
+    GAS_ORACLE_URL: Joi.string().uri().optional().allow(''),
     NODE_API_URL: Joi.string().uri().required(),
     PRIVATE_KEY: Joi.string().required(),
     FLASHLOAN_ADDRESS: Joi.string().required(),
