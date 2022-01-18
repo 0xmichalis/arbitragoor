@@ -202,18 +202,14 @@ export default class Arbitragoor {
                     path0Router,
                     path1Router,
                 } = arbitrageCheck(klimaPools, this.totalDebt)
-                console.log(`#${blockNumber}: Got USDC return: ${netResult.div(1e6)}`)
-                if (netResult.lte(0)) {
+                if (netResult.lt(1e6)) {
+                    // Less than a dollar
+                    console.log(`#${blockNumber}: No arbitrage opportunity`)
                     return
                 }
-                console.log(`#${blockNumber}: ${JSON.stringify({path0Router, path0, path1Router, path1})}`)
 
-                // TODO: Read gas limit dynamically
-                // const gasLimit = BigNumber.from(600000)
-                // const gasPrice = await wallet.getGasPrice()
                 // TODO: Sum gas costs with net result to ensure we are
                 // still profitable
-                // const gasCost = Number(ethers.utils.formatEther(gasPrice.mul(gasLimit)))
 
                 // Execute flasloan request
                 const tx = await this.loaner.flashloan(

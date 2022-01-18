@@ -89,9 +89,6 @@ interface Result {
 }
 
 export const arbitrageCheck = function(routes: Route[], debt: BigNumber): Result {
-    if (routes.length < 2)
-        throw Error('Need multiple routes to check for arbitrage')
-
     // Sort arrays and check for arbitrage opportunity between the
     // first and last routes.
     routes.sort(function(a, b) {
@@ -111,20 +108,8 @@ export const arbitrageCheck = function(routes: Route[], debt: BigNumber): Result
         routes[0].usdcTokenUsdcReserve,
     )
 
-    const netResult = gotUsdc.sub(debt)
-    if (netResult.lte(0)) {
-        // Not today
-        return {
-            netResult,
-            path0Router: 0,
-            path0: [],
-            path1Router: 0,
-            path1: [],
-        }
-    }
-
     return {
-        netResult,
+        netResult: gotUsdc.sub(debt),
         path0Router: routes[last].supportedRouter,
         path0: [
             routes[last].path[0],
