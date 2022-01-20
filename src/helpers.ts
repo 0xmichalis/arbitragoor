@@ -49,6 +49,30 @@ export const checkReserves = function(
     })
 }
 
+export const checkReserves2 = function(
+    usdcToBorrow: BigNumber,
+    klimaUsdcReserve: any,
+    supportedRouter: number,
+    routes: Route[],
+): void {
+    const [
+        usdcReserve,
+        klimaReserve,
+    ] = klimaUsdcReserve
+
+    const klima = getAmountOut(usdcToBorrow, usdcReserve, klimaReserve)
+
+    routes.push({
+        klimaAmount: klima,
+        usdcTokenUsdcReserve: BigNumber.from(0),
+        usdcTokenTokenReserve: BigNumber.from(0),
+        klimaTokenTokenReserve: usdcReserve,
+        klimaTokenKlimaReserve: klimaReserve,
+        supportedRouter,
+        path: [ config.get('USDC_ADDRESS'), config.get('KLIMA_ADDRESS')]
+    })
+}
+
 const getKlima = function(
     amountIn: BigNumber,
     usdcTokenUsdcReserve: BigNumber,
@@ -101,28 +125,40 @@ export const arbitrageCheck = function(routes: Route[], debt: BigNumber): Result
     // At this point we know that the last route in the array gets us the
     // most KLIMA for usdcToBorrow so we use that KLIMA amount to check how
     // much USDC the other route can give us.
-    const gotUsdc = getUsdc(
-        routes[last].klimaAmount,
-        routes[0].klimaTokenKlimaReserve,
-        routes[0].klimaTokenTokenReserve,
-        routes[0].usdcTokenTokenReserve,
-        routes[0].usdcTokenUsdcReserve,
-    )
-
-    return {
-        netResult: gotUsdc.sub(debt),
-        path0Router: routes[last].supportedRouter,
-        path0: [
-            routes[last].path[0],
-            routes[last].path[1],
-            routes[last].path[2],
-        ],
-        path1Router: routes[0].supportedRouter,
-        path1: [
+    let gotUsdc: BigNumber
+    let path0: string[] = routes[last].path
+    let path1: string[] = []
+    if (routes[0].path.length == 2) {
+        path1 = [
+            routes[0].path[1],
+            routes[0].path[0],
+        ]
+        gotUsdc = getAmountOut(
+            routes[last].klimaAmount,
+            routes[0].klimaTokenKlimaReserve,
+            routes[0].klimaTokenTokenReserve,
+        )
+    } else {
+        path1 = [
             routes[0].path[2],
             routes[0].path[1],
             routes[0].path[0],
         ]
+        gotUsdc = getUsdc(
+            routes[last].klimaAmount,
+            routes[0].klimaTokenKlimaReserve,
+            routes[0].klimaTokenTokenReserve,
+            routes[0].usdcTokenTokenReserve,
+            routes[0].usdcTokenUsdcReserve,
+        )
+    }
+
+    return {
+        netResult: gotUsdc.sub(debt),
+        path0Router: routes[last].supportedRouter,
+        path0,
+        path1Router: routes[0].supportedRouter,
+        path1,
     }
 }
 

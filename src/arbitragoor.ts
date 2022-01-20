@@ -3,7 +3,7 @@ import { BigNumber, Contract, ethers, providers, Wallet } from 'ethers'
 import { Contract as MulticallContract, Provider as MulticallProvider } from 'ethers-multicall'
 
 import { config } from './config'
-import { arbitrageCheck, checkReserves, getOptions, Route } from './helpers'
+import { arbitrageCheck, checkReserves, checkReserves2, getOptions, Route } from './helpers'
 
 export default class Arbitragoor {
     // RPC providers
@@ -33,6 +33,7 @@ export default class Arbitragoor {
     private klimaBctAddress: string
     private usdcMco2Address: string
     private klimaMco2Address: string
+    private klimaUsdcAddress: string
 
     // Booleans used to dynamically discover token reserves
     // in LP contracts
@@ -40,6 +41,7 @@ export default class Arbitragoor {
     private usdcMco2Reverse: boolean
     private klimaBctReverse: boolean
     private klimaMco2Reverse: boolean
+    private klimaUsdcReverse: boolean
 
     constructor() {
         this.provider = new providers.StaticJsonRpcProvider(config.get('NODE_API_URL'))
@@ -70,10 +72,12 @@ export default class Arbitragoor {
         // the proper pair address so override here via env variables
         this.usdcMco2Address = config.get('USDC_MCO2_ADDRESS')
         this.klimaMco2Address = config.get('KLIMA_MCO2_ADDRESS')
+        this.klimaUsdcAddress = Pair.getAddress(klima, usdc)
         console.log(`USDC/BCT: ${this.usdcBctAddress}`)
         console.log(`USDC/MCO2: ${this.usdcMco2Address}`)
         console.log(`KLIMA/BCT: ${this.klimaBctAddress}`)
         console.log(`KLIMA/MCO2: ${this.klimaMco2Address}`)
+        console.log(`KLIMA/USDC: ${this.klimaUsdcAddress}`)
 
         /************************************************
          *  ROUTES TO ARB
@@ -89,11 +93,13 @@ export default class Arbitragoor {
         // USDC -> MCO2 -> KLIMA
         const usdcMco2 = new MulticallContract(this.usdcMco2Address, this.uniPairAbi)
         const klimaMco2 = new MulticallContract(this.klimaMco2Address, this.uniPairAbi)
+        const klimaUsdc = new MulticallContract(this.klimaUsdcAddress, this.uniPairAbi)
         this.calls = [
             usdcBct.getReserves(),
             klimaBct.getReserves(),
             usdcMco2.getReserves(),
             klimaMco2.getReserves(),
+            klimaUsdc.getReserves(),
         ]
 
         /************************************************
@@ -164,6 +170,7 @@ export default class Arbitragoor {
                     klimaBctReserve,
                     usdcMco2Reserve,
                     klimaMco2Reserve,
+                    klimaUsdcReserve,
                 ] = await this.multicallProvider.all(this.calls)
 
                 // USDC -> BCT -> KLIMA
@@ -191,6 +198,16 @@ export default class Arbitragoor {
                     1,
                     this.usdcMco2Reverse,
                     this.klimaMco2Reverse,
+                    klimaPools,
+                )
+
+                // USDC -> KLIMA
+                checkReserves2(
+                    this.usdcToBorrow,
+                    klimaUsdcReserve,
+                    // This should match the router that supports this path in the contract
+                    // In this case router0 is meant to be the SushiSwap router.
+                    0,
                     klimaPools,
                 )
 
