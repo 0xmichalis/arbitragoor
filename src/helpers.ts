@@ -180,8 +180,9 @@ export const getOptions = async function() {
         return options
     }
 
-    // 30 Gwei tip to miners
-    const tip = BigNumber.from(30000000000)
+    // Tip to miners
+    const confTip = config.get('GAS_MAX_PRIORITY_FEE_WEI')
+    const tip = confTip ? BigNumber.from(confTip) : BigNumber.from(30000000000)
 
     return {
         ...options,
