@@ -181,8 +181,14 @@ export const getOptions = async function() {
     }
 
     // Tip to miners
-    const confTip = config.get('GAS_MAX_PRIORITY_FEE_WEI')
-    const tip = confTip ? BigNumber.from(confTip) : BigNumber.from(30000000000)
+    const maxPrioFeeWei = config.get('GAS_MAX_PRIORITY_FEE_WEI')
+    const tip = maxPrioFeeWei ? BigNumber.from(maxPrioFeeWei) : BigNumber.from(30000000000)
+
+    const maxFeeCeilingWei = config.get('GAS_MAX_FEE_CEILING_WEI')
+    const maxFeeCeiling = maxFeeCeilingWei ? BigNumber.from(maxFeeCeilingWei) : BigNumber.from(1300000000000)
+    if (gasPrice.gt(maxFeeCeiling)) {
+        gasPrice = maxFeeCeiling
+    }
 
     return {
         ...options,
