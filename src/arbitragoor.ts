@@ -1,5 +1,5 @@
 import { ChainId, Pair, Token } from '@sushiswap/sdk'
-import { BigNumber, Contract, ethers, providers, Wallet } from 'ethers'
+import { BigNumber, Contract, ethers, providers, utils, Wallet } from 'ethers'
 import { Contract as MulticallContract, Provider as MulticallProvider } from 'ethers-multicall'
 
 import { config } from './config'
@@ -241,7 +241,7 @@ export default class Arbitragoor {
                 )
                 await tx.wait()
 
-                console.log(`#${blockNumber}: Flashloan request ${tx.hash} successfully mined`)
+                console.log(`#${blockNumber}: Flashloan request ${tx.hash} for ${utils.formatUnits(netResult, 6)} USDC successfully mined`)
             } catch (err) {
                 console.error(`#${blockNumber}: Failed to execute flasloan request: ${err}`)
             } finally {
