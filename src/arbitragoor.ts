@@ -41,7 +41,6 @@ export default class Arbitragoor {
     private usdcMco2Reverse: boolean
     private klimaBctReverse: boolean
     private klimaMco2Reverse: boolean
-    private klimaUsdcReverse: boolean
 
     constructor() {
         this.provider = new providers.StaticJsonRpcProvider(config.get('NODE_API_URL'))

@@ -2,7 +2,7 @@ import dotenv from 'dotenv'
 import Joi from 'joi'
 
 
-const applicationConfigSchema: Joi.ObjectSchema = Joi.object({
+const schema: Joi.ObjectSchema = Joi.object({
     GAS_MAX_FEE_CEILING_WEI: Joi.number().optional().allow(''),
     GAS_MAX_PRIORITY_FEE_WEI: Joi.number().optional().allow(''),
     GAS_ORACLE_URL: Joi.string().uri().optional().allow(''),
@@ -22,19 +22,24 @@ export class ConfigService {
     private config
 
     constructor() {
-      this.config = this.validateConfig(dotenv.config().parsed)
+      const { parsed: parsedConfig, error: parseError } = dotenv.config()
+      if (parseError) {
+        console.log(`No .env file found, config.get will use process.env`)
+        return
+      }
+      const { error: validationError, value: config } = schema.validate(parsedConfig)
+      if (validationError) {
+        throw Error(`Failed to validate config: ${validationError}`)
+      }
+      this.config = config
     }
 
     get(key: string): string {
-      return process.env[key] || this.config[key]
-    }
-
-    private validateConfig(parsedConfig: any): any {
-      const { error, value: validatedEnvConfig } = applicationConfigSchema.validate(parsedConfig)
-      if (error) {
-        throw Error(`Failed to validate config: ${error.message}`)
+      try {
+        return process.env[key] || this.config[key]
+      } catch {
+        return ''
       }
-      return validatedEnvConfig
     }
 }
 
