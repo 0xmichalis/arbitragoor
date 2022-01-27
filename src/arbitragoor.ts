@@ -92,7 +92,10 @@ export default class Arbitragoor {
         // USDC -> MCO2 -> KLIMA
         const usdcMco2 = new MulticallContract(this.usdcMco2Address, this.uniPairAbi)
         const klimaMco2 = new MulticallContract(this.klimaMco2Address, this.uniPairAbi)
+        // USDC -> KLIMA
         const klimaUsdc = new MulticallContract(this.klimaUsdcAddress, this.uniPairAbi)
+
+        // Aggregate calls to include in multicall
         this.calls = [
             usdcBct.getReserves(),
             klimaBct.getReserves(),
