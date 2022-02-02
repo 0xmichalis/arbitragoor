@@ -186,6 +186,9 @@ export const getOptions = async function() {
 
     const maxFeeCeilingWei = config.get('GAS_MAX_FEE_CEILING_WEI') || 1300000000000
     const maxFeeCeiling = BigNumber.from(maxFeeCeilingWei)
+    if (gasPrice.lt(tip)) {
+        gasPrice = tip.mul(2)
+    }
     if (gasPrice.gt(maxFeeCeiling)) {
         gasPrice = maxFeeCeiling
     }
