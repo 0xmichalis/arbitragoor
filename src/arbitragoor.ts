@@ -226,12 +226,14 @@ export default class Arbitragoor {
                     console.log(`#${blockNumber}: No arbitrage opportunity`)
                     return
                 }
+                console.log(`Found arbitrage opportunity: ${netResult.div(1e6)}`)
 
                 // TODO: Sum gas costs with net result to ensure we are
                 // still profitable
                 const options = await getOptions()
 
                 // Execute flasloan request
+                console.log('Sending flashloan transaction...')
                 const tx = await this.loaner.flashloan(
                     config.get('USDC_ADDRESS'),
                     this.usdcToBorrow,
