@@ -176,7 +176,7 @@ export const getOptions = async function() {
         const resp = await axios.get(gasOracleUrl)
         gasPrice = utils.parseUnits(resp.data.result.FastGasPrice, 'gwei')
     } catch (e) {
-        console.log(`Failed to get gas price from oracle, tx will use ethers defaults: ${e.message}`)
+        console.log(`Failed to get gas price from oracle, tx will use ethers defaults: ${e}`)
         return options
     }
 

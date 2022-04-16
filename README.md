@@ -5,7 +5,6 @@ Scripts to execute arbitrage requests, used in conjuction with [this smart contr
 ## Build
 
 ```
-yarn
 yarn build
 ```
 

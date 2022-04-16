@@ -37,10 +37,10 @@ export default class Arbitragoor {
 
     // Booleans used to dynamically discover token reserves
     // in LP contracts
-    private usdcBctReverse: boolean
-    private usdcMco2Reverse: boolean
-    private klimaBctReverse: boolean
-    private klimaMco2Reverse: boolean
+    private usdcBctReverse = false
+    private usdcMco2Reverse = false
+    private klimaBctReverse = false
+    private klimaMco2Reverse = false
 
     constructor() {
         this.provider = new providers.StaticJsonRpcProvider(config.get('NODE_API_URL'))
