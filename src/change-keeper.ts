@@ -1,6 +1,7 @@
 import { ethers } from 'ethers'
 
 import { ConfigService } from './config'
+import { getOptions } from './helpers'
 
 const config = new ConfigService()
 const provider = new ethers.providers.JsonRpcProvider(config.get('NODE_API_URL'))
@@ -15,7 +16,8 @@ async function changeKeeper(newKeeper: string): Promise<void> {
     ])
     const loaner = new ethers.Contract(flashloanAddress, flashloanAbi, wallet)
 
-    const tx = await loaner.changeKeeper(newKeeper)
+    const options = await getOptions()
+    const tx = await loaner.changeKeeper(newKeeper, options)
     await tx.wait()
     console.log(`Keeper change request ${tx.hash} successfully mined`)
 }
