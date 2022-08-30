@@ -112,6 +112,7 @@ export default class Arbitragoor {
             'function getit(address asset, uint256 amount, address[] calldata path0, address[] calldata path1, uint8 path0Router, uint8 path1Router) public',
         ])
         const flashloanAddress = config.get('FLASHLOAN_ADDRESS')
+        console.log(`Flashloan contract: ${flashloanAddress}`)
         this.loaner = new ethers.Contract(flashloanAddress, flashloanAbi, this.wallet)
 
         // It may be worth making this dynamic in the future based
