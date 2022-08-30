@@ -1,5 +1,5 @@
 import axios from 'axios'
-import { BigNumber, ethers, utils } from 'ethers'
+import { BigNumber, utils } from 'ethers'
 
 import { config } from './config'
 
@@ -163,42 +163,25 @@ export const arbitrageCheck = function(routes: Route[], debt: BigNumber): Result
 }
 
 export const getOptions = async function() {
-    let gasPrice: BigNumber
     const options = {
         gasLimit: BigNumber.from(650000),
+        maxFeePerGas: null,
+        maxPriorityFeePerGas: null
     }
 
     try {
         const gasOracleUrl = config.get('GAS_ORACLE_URL')
-        if (!gasOracleUrl) {
-            return options
-        }
+        if (!gasOracleUrl) return options
+
         const resp = await axios.get(gasOracleUrl)
-        gasPrice = utils.parseUnits(resp.data.result.FastGasPrice, 'gwei')
+        const gasPrice = utils.parseUnits(resp.data.result.FastGasPrice, 'gwei')
+        return {
+            ...options,
+            maxFeePerGas: gasPrice,
+            maxPriorityFeePerGas: utils.parseUnits('50', 'gwei'),
+        }
     } catch (e) {
         console.log(`Failed to get gas price from oracle, tx will use ethers defaults: ${e}`)
         return options
-    }
-
-    // Tip to miners
-    const maxPrioFeeWei = config.get('GAS_MAX_PRIORITY_FEE_WEI') || 30000000000
-    let tip = BigNumber.from(maxPrioFeeWei)
-
-    const maxFeeCeilingWei = config.get('GAS_MAX_FEE_CEILING_WEI') || 1300000000000
-    const maxFeeCeiling = BigNumber.from(maxFeeCeilingWei)
-    if (gasPrice.lt(tip)) {
-        gasPrice = tip.mul(2)
-    }
-    if (gasPrice.gt(maxFeeCeiling)) {
-        gasPrice = maxFeeCeiling
-        if (gasPrice.lt(tip)) {
-            tip = gasPrice.div(2)
-        }
-    }
-
-    return {
-        ...options,
-        maxFeePerGas: gasPrice,
-        maxPriorityFeePerGas: tip,
     }
 }

@@ -3,8 +3,6 @@ import Joi from 'joi'
 
 
 const schema: Joi.ObjectSchema = Joi.object({
-    GAS_MAX_FEE_CEILING_WEI: Joi.number().optional().allow(''),
-    GAS_MAX_PRIORITY_FEE_WEI: Joi.number().optional().allow(''),
     GAS_ORACLE_URL: Joi.string().uri().optional().allow(''),
     NODE_API_URL: Joi.string().uri().required(),
     PRIVATE_KEY: Joi.string().required(),

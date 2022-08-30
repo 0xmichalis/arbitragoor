@@ -1,5 +1,8 @@
 {
     "compilerOptions": {
+      "noUnusedLocals": true,
+      "noUnusedParameters": true,
+      "noImplicitReturns": true,
       "strict": true,
       "allowJs": false,
       "module": "commonjs",

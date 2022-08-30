@@ -134,6 +134,13 @@ export default class Arbitragoor {
         // configure a chain id
         await this.multicallProvider.init()
 
+        // Check gas oracle is properly configured
+        const opts = await getOptions()
+        if (opts.maxFeePerGas)
+            console.log(`Current gas price: ${utils.formatUnits(opts.maxFeePerGas, 'gwei')}`)
+        else
+            console.log('Gas oracle is not configured, will be falling back to ethers.js for gas')
+
         // Initialize booleans used for dynamic token discovery in LP contracts
         const usdcBct = new Contract(this.usdcBctAddress, this.uniPairAbi, this.provider)
         const klimaBct = new Contract(this.klimaBctAddress, this.uniPairAbi, this.provider)
