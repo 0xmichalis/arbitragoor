@@ -1,9 +1,9 @@
-import { ChainId, Pair, Token } from '@sushiswap/sdk'
+import { ChainId } from '@sushiswap/sdk'
 import { BigNumber, Contract, ethers, providers, utils, Wallet } from 'ethers'
-import { Contract as MulticallContract, Provider as MulticallProvider } from 'ethers-multicall'
+import { Provider as MulticallProvider } from 'ethers-multicall'
 
 import { config } from './config'
-import { arbitrageCheck, checkReserves, checkReserves2, getOptions, Route } from './helpers'
+import { arbitrageCheck, checkReserves, checkReserves2, getCalls, getOptions, getPools, Route } from './helpers'
 
 export default class Arbitragoor {
     // RPC providers
@@ -23,103 +23,36 @@ export default class Arbitragoor {
     // Flashloan contract
     private loaner: Contract
     // UniswapPair v2 ABI
-    private uniPairAbi: string[]
+    private uniPairAbi = [
+        'function getReserves() view returns (uint112 _reserve0, uint112 _reserve1, uint32 _blockTimestampLast)',
+        'function token0() view returns (address)',
+    ]
 
     // Whether the class is initialized
     private isInitialized: boolean = false
 
-    // LP addresses
-    private usdcBctAddress: string
-    private klimaBctAddress: string
-    private usdcMco2Address: string
-    private klimaMco2Address: string
-    private klimaUsdcAddress: string
-
-    // Booleans used to dynamically discover token reserves
-    // in LP contracts
-    private usdcBctReverse = false
-    private usdcMco2Reverse = false
-    private klimaBctReverse = false
-    private klimaMco2Reverse = false
-
     constructor() {
+        // Setup node connections
         this.provider = new providers.StaticJsonRpcProvider(config.get('NODE_API_URL'))
         this.multicallProvider = new MulticallProvider(this.provider)
+
+        // Setup keeper
         this.wallet = new ethers.Wallet(config.get('PRIVATE_KEY'), this.provider)
         console.log(`Keeper address: ${this.wallet.address}`)
 
-        /************************************************
-         *  ERC20 CONTRACTS
-         ***********************************************/
-
-        const bct = new Token(ChainId.MATIC, config.get('BCT_ADDRESS'), 18, 'BCT')
-        const mco2 = new Token(ChainId.MATIC, config.get('MCO2_ADDRESS'), 18, 'MCO2')
-        const usdc = new Token(ChainId.MATIC, config.get('USDC_ADDRESS'), 6, 'USDC')
-        const klima = new Token(ChainId.MATIC, config.get('KLIMA_ADDRESS'), 9, 'KLIMA')
-        console.log(`USDC: ${usdc.address}`)
-        console.log(`KLIMA: ${klima.address}`)
-        console.log(`BCT: ${bct.address}`)
-        console.log(`MCO2: ${mco2.address}`)
-
-        /************************************************
-         *  LP ADDRESSES
-         ***********************************************/
-
-        this.usdcBctAddress = Pair.getAddress(usdc, bct)
-        this.klimaBctAddress = Pair.getAddress(klima, bct)
-        // For some reason the QuickSwap SDK does not return
-        // the proper pair address so override here via env variables
-        this.usdcMco2Address = config.get('USDC_MCO2_ADDRESS')
-        this.klimaMco2Address = config.get('KLIMA_MCO2_ADDRESS')
-        this.klimaUsdcAddress = Pair.getAddress(klima, usdc)
-        console.log(`USDC/BCT: ${this.usdcBctAddress}`)
-        console.log(`USDC/MCO2: ${this.usdcMco2Address}`)
-        console.log(`KLIMA/BCT: ${this.klimaBctAddress}`)
-        console.log(`KLIMA/MCO2: ${this.klimaMco2Address}`)
-        console.log(`KLIMA/USDC: ${this.klimaUsdcAddress}`)
-
-        /************************************************
-         *  ROUTES TO ARB
-         ***********************************************/
-
-        this.uniPairAbi = [
-            'function getReserves() view returns (uint112 _reserve0, uint112 _reserve1, uint32 _blockTimestampLast)',
-            'function token0() view returns (address)',
-        ]
-        // USDC -> BCT -> KLIMA
-        const usdcBct = new MulticallContract(this.usdcBctAddress, this.uniPairAbi)
-        const klimaBct = new MulticallContract(this.klimaBctAddress, this.uniPairAbi)
-        // USDC -> MCO2 -> KLIMA
-        const usdcMco2 = new MulticallContract(this.usdcMco2Address, this.uniPairAbi)
-        const klimaMco2 = new MulticallContract(this.klimaMco2Address, this.uniPairAbi)
-        // USDC -> KLIMA
-        const klimaUsdc = new MulticallContract(this.klimaUsdcAddress, this.uniPairAbi)
-
         // Aggregate calls to include in multicall
-        this.calls = [
-            usdcBct.getReserves(),
-            klimaBct.getReserves(),
-            usdcMco2.getReserves(),
-            klimaMco2.getReserves(),
-            klimaUsdc.getReserves(),
-        ]
+        const pools = getPools(ChainId.MATIC)
+        this.calls = getCalls(pools, this.uniPairAbi)
 
-        /************************************************
-         *  FLASHLOAN INTERFACE
-         ***********************************************/
-
-        const flashloanAbi = new ethers.utils.Interface([
+        // Setup flashloan contract
+        this.loaner = new ethers.Contract(config.get('FLASHLOAN_ADDRESS'), [
             'function getit(address asset, uint256 amount, address[] calldata path0, address[] calldata path1, uint8 path0Router, uint8 path1Router) public',
-        ])
-        const flashloanAddress = config.get('FLASHLOAN_ADDRESS')
-        console.log(`Flashloan contract: ${flashloanAddress}`)
-        this.loaner = new ethers.Contract(flashloanAddress, flashloanAbi, this.wallet)
+        ], this.wallet)
+        console.log(`Flashloan contract: ${this.loaner.address}`)
 
-        // It may be worth making this dynamic in the future based
-        // on pool volume but I suspect a more optimal solution in
-        // terms of speed is to run multiple bots with different sizes
-        // to avoid spending the extra time needed to figure the right
-        // value out.
+        // TODO: Check that the keeper has write access in the flashloan contract
+
+        // Setup flashloan borrow amount
         const usdcHumanReadble = config.get('BORROWED_AMOUNT')
         this.usdcToBorrow = ethers.utils.parseUnits(usdcHumanReadble, 6)
         // Premium withheld by AAVE
@@ -140,16 +73,6 @@ export default class Arbitragoor {
             console.log(`Current gas price: ${utils.formatUnits(opts.maxFeePerGas, 'gwei')}`)
         else
             console.log('Gas oracle is not configured, will be falling back to ethers.js for gas')
-
-        // Initialize booleans used for dynamic token discovery in LP contracts
-        const usdcBct = new Contract(this.usdcBctAddress, this.uniPairAbi, this.provider)
-        const klimaBct = new Contract(this.klimaBctAddress, this.uniPairAbi, this.provider)
-        const usdcMco2 = new Contract(this.usdcMco2Address, this.uniPairAbi, this.provider)
-        const klimaMco2 = new Contract(this.klimaMco2Address, this.uniPairAbi, this.provider)
-        this.usdcBctReverse = (await usdcBct.token0()).toLowerCase() != config.get('USDC_ADDRESS').toLowerCase()
-        this.usdcMco2Reverse = (await usdcMco2.token0()).toLowerCase() != config.get('USDC_ADDRESS').toLowerCase()
-        this.klimaBctReverse = (await klimaBct.token0()).toLowerCase() != config.get('KLIMA_ADDRESS').toLowerCase()
-        this.klimaMco2Reverse = (await klimaMco2.token0()).toLowerCase() != config.get('KLIMA_ADDRESS').toLowerCase()
 
         this.isInitialized = true
     }
@@ -173,8 +96,8 @@ export default class Arbitragoor {
             }
 
             try {
-                // Gather reserves from all Klima pools
-                const klimaPools: Route[] = []
+                // Gather reserves from all routes
+                const routes: Route[] = []
                 const [
                     usdcBctReserve,
                     klimaBctReserve,
@@ -194,7 +117,7 @@ export default class Arbitragoor {
                     0,
                     this.usdcBctReverse,
                     this.klimaBctReverse,
-                    klimaPools,
+                    routes,
                 )
 
                 // USDC -> MCO2 -> KLIMA
@@ -208,7 +131,7 @@ export default class Arbitragoor {
                     1,
                     this.usdcMco2Reverse,
                     this.klimaMco2Reverse,
-                    klimaPools,
+                    routes,
                 )
 
                 // USDC -> KLIMA
@@ -218,7 +141,7 @@ export default class Arbitragoor {
                     // This should match the router that supports this path in the contract
                     // In this case router0 is meant to be the SushiSwap router.
                     0,
-                    klimaPools,
+                    routes,
                 )
 
                 // Check whether we can execute an arbitrage
@@ -228,7 +151,7 @@ export default class Arbitragoor {
                     path1,
                     path0Router,
                     path1Router,
-                } = arbitrageCheck(klimaPools, this.totalDebt)
+                } = arbitrageCheck(routes, this.totalDebt)
                 if (netResult.lt(1e6)) {
                     // Less than a dollar
                     console.log(`#${blockNumber}: No arbitrage opportunity`)

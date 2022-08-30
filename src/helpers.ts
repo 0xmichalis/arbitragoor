@@ -1,7 +1,10 @@
 import axios from 'axios'
 import { BigNumber, utils } from 'ethers'
+import { Contract as MulticallContract } from 'ethers-multicall'
 
+import addresses from './config/addresses.json'
 import { config } from './config'
+import { Pair, Token } from '@sushiswap/sdk'
 
 // Copied from https://github.com/sushiswap/sushiswap/blob/45da97206358039039883c4a99c005bb8a4bef0c/contracts/uniswapv2/libraries/UniswapV2Library.sol#L48-L51
 const getAmountOut = function(amountIn: BigNumber, reserveIn: BigNumber, reserveOut: BigNumber): BigNumber {
@@ -184,4 +187,57 @@ export const getOptions = async function() {
         console.log(`Failed to get gas price from oracle, tx will use ethers defaults: ${e}`)
         return options
     }
+}
+
+export interface Pool {
+    address?: string
+    router: number
+    token0: string
+    token1: string
+    reverse: boolean
+}
+
+const getToken = (symbol: string, tokens: Token[]): Token => {
+    const token = tokens.find((t) => t.symbol === symbol)
+    if (!token) throw Error(`symbol ${symbol} not found in token configuration`)
+    return token
+}
+
+export const getPools = (chainId: number): Pool[] => {
+    // address configuration validation
+    if (addresses.tokens.length < 4) throw Error('invalid token configuration in addresses.json')
+    if (addresses.liquidityPools.length < 3) throw Error('invalid lp configuration in addresses.json')
+
+    const tokens: Token[] = []
+    addresses.tokens.forEach(t => {
+        const token = new Token(chainId, t.address, t.decimals, t.symbol)
+        tokens.push(token)
+        console.log(`${token.symbol}: ${token.address}`)
+    })
+
+    const pools: Pool[] = []
+    addresses.liquidityPools.forEach(p => {
+        let address = ''
+        if (!p.address) {
+            const token0 = getToken(p.token0, tokens)
+            const token1 = getToken(p.token1, tokens)
+            p.address = Pair.getAddress(token0, token1)
+        }
+        pools.push(p)
+        console.log(`${p.token0}/${p.token1}: ${address}`)
+    })
+
+    return pools
+}
+
+export const getCalls = (pools: Pool[], poolAbi: string[]): any[] => {
+    const contracts: MulticallContract[] = []
+    pools.forEach(p => {
+        if (!p.address) throw Error(`undefined address for pool ${JSON.stringify(p)}`)
+        contracts.push(new MulticallContract(p.address, poolAbi))
+    })
+
+    const calls: any[] = []
+    contracts.forEach(c => calls.push(c.getReserves()))
+    return calls
 }
