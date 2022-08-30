@@ -109,7 +109,7 @@ export default class Arbitragoor {
          ***********************************************/
 
         const flashloanAbi = new ethers.utils.Interface([
-            'function flashloan(address asset, uint256 amount, address[] calldata path0, address[] calldata path1, uint8 path0Router, uint8 path1Router) public',
+            'function getit(address asset, uint256 amount, address[] calldata path0, address[] calldata path1, uint8 path0Router, uint8 path1Router) public',
         ])
         const flashloanAddress = config.get('FLASHLOAN_ADDRESS')
         this.loaner = new ethers.Contract(flashloanAddress, flashloanAbi, this.wallet)
@@ -234,7 +234,7 @@ export default class Arbitragoor {
 
                 // Execute flasloan request
                 console.log('Sending flashloan transaction...')
-                const tx = await this.loaner.flashloan(
+                const tx = await this.loaner.getit(
                     config.get('USDC_ADDRESS'),
                     this.usdcToBorrow,
                     path0,
