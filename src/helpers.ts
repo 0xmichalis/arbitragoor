@@ -205,15 +205,23 @@ const getToken = (symbol: string, tokens: Token[]): Token => {
 
 export const getPools = (chainId: number): Pool[] => {
     // address configuration validation
-    if (addresses.tokens.length < 4) throw Error('invalid token configuration in addresses.json')
-    if (addresses.liquidityPools.length < 3) throw Error('invalid lp configuration in addresses.json')
+    if (addresses.tokens.length < 2) throw Error('invalid token configuration in addresses.json')
+    if (addresses.liquidityPools.length < 2) throw Error('invalid lp configuration in addresses.json')
 
+    let sourceExists = false
+    let targetExists = false
     const tokens: Token[] = []
+
     addresses.tokens.forEach(t => {
         const token = new Token(chainId, t.address, t.decimals, t.symbol)
         tokens.push(token)
-        console.log(`${token.symbol}: ${token.address}`)
+        sourceExists = sourceExists || t.type === 'source'
+        targetExists = targetExists || t.type === 'target'
+        console.log(`${token.symbol}: ${token.address} (${t.type})`)
     })
+
+    if (!sourceExists) throw new Error('invalid token configuration: no type=source found')
+    if (!targetExists) throw new Error('invalid token configuration: no type=target found')
 
     const pools: Pool[] = []
     addresses.liquidityPools.forEach(p => {
