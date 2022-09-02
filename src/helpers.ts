@@ -19,10 +19,10 @@ export const checkReserves = function(
     usdcTokenReserve: any,
     tokenKlimaReserve: any,
     tokenAddress: string,
-    supportedRouter: number,
+    router: number,
     usdcReverse: boolean,
     klimaReverse: boolean,
-    routes: Route[],
+    routes: RouteWithReserves[],
 ): void {
     const [
         usdcTokenUsdcReserve,
@@ -47,7 +47,7 @@ export const checkReserves = function(
         usdcTokenTokenReserve: usdcReverse ? usdcTokenUsdcReserve : usdcTokenTokenReserve,
         klimaTokenTokenReserve: klimaReverse ? klimaTokenTokenReserve: klimaTokenKlimaReserve,
         klimaTokenKlimaReserve: klimaReverse ? klimaTokenKlimaReserve : klimaTokenTokenReserve,
-        supportedRouter,
+        router,
         path: [ config.get('USDC_ADDRESS'), tokenAddress, config.get('KLIMA_ADDRESS')]
     })
 }
@@ -55,8 +55,8 @@ export const checkReserves = function(
 export const checkReserves2 = function(
     usdcToBorrow: BigNumber,
     klimaUsdcReserve: any,
-    supportedRouter: number,
-    routes: Route[],
+    router: number,
+    routes: RouteWithReserves[],
 ): void {
     const [
         usdcReserve,
@@ -71,7 +71,7 @@ export const checkReserves2 = function(
         usdcTokenTokenReserve: BigNumber.from(0),
         klimaTokenTokenReserve: usdcReserve,
         klimaTokenKlimaReserve: klimaReserve,
-        supportedRouter,
+        router,
         path: [ config.get('USDC_ADDRESS'), config.get('KLIMA_ADDRESS')]
     })
 }
@@ -98,14 +98,12 @@ const getUsdc = function(
     return getAmountOut(tokenAmount, usdcTokenTokenReserve, usdcTokenUsdcReserve)
 }
 
-export interface Route {
-    supportedRouter: number
+export interface RouteWithReserves extends Route {
     klimaAmount: BigNumber
     usdcTokenUsdcReserve: BigNumber
     usdcTokenTokenReserve: BigNumber
     klimaTokenTokenReserve: BigNumber
     klimaTokenKlimaReserve: BigNumber
-    path: string[]
 }
 
 interface Result {
@@ -116,7 +114,7 @@ interface Result {
     path1Router: number
 }
 
-export const arbitrageCheck = function(routes: Route[], debt: BigNumber): Result {
+export const arbitrageCheck = function(routes: RouteWithReserves[], debt: BigNumber): Result {
     // Sort arrays and check for arbitrage opportunity between the
     // first and last routes.
     routes.sort(function(a, b) {
@@ -158,9 +156,9 @@ export const arbitrageCheck = function(routes: Route[], debt: BigNumber): Result
 
     return {
         netResult: gotUsdc.sub(debt),
-        path0Router: routes[last].supportedRouter,
+        path0Router: routes[last].router,
         path0,
-        path1Router: routes[0].supportedRouter,
+        path1Router: routes[0].router,
         path1,
     }
 }
@@ -189,16 +187,25 @@ export const getOptions = async function() {
     }
 }
 
+export interface IToken {
+    token: Token
+    type: string
+}
+
 export interface Pool {
     address?: string
+    // Depends on how the liquidity routers have been configured
+    // in the flashloan contract. Used as an indication of which
+    // router to use for a swap.
     router: number
     token0: string
     token1: string
+    // Whether token0 is token0 in the LP contract or not.
     reverse: boolean
 }
 
-const getToken = (symbol: string, tokens: Token[]): Token => {
-    const token = tokens.find((t) => t.symbol === symbol)
+const getToken = (symbol: string, tokens: IToken[]): IToken => {
+    const token = tokens.find((t) => t.token.symbol === symbol)
     if (!token) throw Error(`symbol ${symbol} not found in token configuration`)
     return token
 }
@@ -210,11 +217,11 @@ export const getPools = (chainId: number): Pool[] => {
 
     let sourceExists = false
     let targetExists = false
-    const tokens: Token[] = []
+    const tokens: IToken[] = []
 
     addresses.tokens.forEach(t => {
         const token = new Token(chainId, t.address, t.decimals, t.symbol)
-        tokens.push(token)
+        tokens.push({token, type: t.type})
         sourceExists = sourceExists || t.type === 'source'
         targetExists = targetExists || t.type === 'target'
         console.log(`${token.symbol}: ${token.address} (${t.type})`)
@@ -229,13 +236,65 @@ export const getPools = (chainId: number): Pool[] => {
         if (!p.address) {
             const token0 = getToken(p.token0, tokens)
             const token1 = getToken(p.token1, tokens)
-            p.address = Pair.getAddress(token0, token1)
+            p.address = Pair.getAddress(token0.token, token1.token)
         }
         pools.push(p)
         console.log(`${p.token0}/${p.token1}: ${address}`)
     })
 
     return pools
+}
+
+export interface Route {
+    router: number
+    path: string[]
+}
+
+export const getRoutes = (tokens: IToken[], pools: Pool[]): Route[] => {
+    const routes: Route[] = []
+    const tmp = new Map()
+
+    pools.forEach(p => {
+        const token0 = getToken(p.token0, tokens)
+        const token1 = getToken(p.token1, tokens)
+        if (token0.type === 'source' && token1.type === 'target') {
+            routes.push({router: p.router, path: [token0.token.address, token1.token.address]})
+            return
+        }
+            
+        if (token1.type === 'source' && token0.type === 'target') {
+            routes.push({router: p.router, path: [token1.token.address, token0.token.address]})
+            return
+        }
+        
+        let intermediate
+        let edge
+        if (token0.type === 'intermediate') {
+            intermediate = token0
+            edge = token1
+        } else {
+            intermediate = token1
+            edge = token0
+        }
+        const isSource = edge.type === 'source'
+        const rTmp = tmp.get(intermediate?.token.symbol)
+        if (!rTmp) {
+            if (isSource) {
+                tmp.set(intermediate?.token.symbol, [edge, intermediate, null])
+            } else {
+                tmp.set(intermediate?.token.symbol, [null, intermediate, edge])
+            }
+        } else {
+            if (isSource) {
+                rTmp[0] = edge
+            } else {
+                rTmp[2] = edge
+            }
+            tmp.set(intermediate?.token.symbol, rTmp)
+        }     
+    })
+
+    return routes
 }
 
 export const getCalls = (pools: Pool[], poolAbi: string[]): any[] => {

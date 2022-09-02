@@ -3,7 +3,7 @@ import { BigNumber, Contract, ethers, providers, utils, Wallet } from 'ethers'
 import { Provider as MulticallProvider } from 'ethers-multicall'
 
 import { config } from './config'
-import { arbitrageCheck, checkReserves, checkReserves2, getCalls, getOptions, getPools, Route } from './helpers'
+import { arbitrageCheck, checkReserves, checkReserves2, getCalls, getOptions, getPools, RouteWithReserves } from './helpers'
 
 export default class Arbitragoor {
     // RPC providers
@@ -97,7 +97,7 @@ export default class Arbitragoor {
 
             try {
                 // Gather reserves from all routes
-                const routes: Route[] = []
+                const routes: RouteWithReserves[] = []
                 const [
                     usdcBctReserve,
                     klimaBctReserve,
