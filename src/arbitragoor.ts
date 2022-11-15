@@ -34,6 +34,8 @@ export default class Arbitragoor {
     private usdcMco2Address: string
     private klimaMco2Address: string
     private klimaUsdcAddress: string
+    private usdcNctAddress: string
+    private klimaNctAddress: string
 
     // Booleans used to dynamically discover token reserves
     // in LP contracts
@@ -41,6 +43,8 @@ export default class Arbitragoor {
     private usdcMco2Reverse = false
     private klimaBctReverse = false
     private klimaMco2Reverse = false
+    private usdcNctReverse = false
+    private klimaNctReverse = false
 
     constructor() {
         this.provider = new providers.StaticJsonRpcProvider(config.get('NODE_API_URL'))
@@ -53,12 +57,14 @@ export default class Arbitragoor {
          ***********************************************/
 
         const bct = new Token(ChainId.MATIC, config.get('BCT_ADDRESS'), 18, 'BCT')
+        const nct = new Token(ChainId.MATIC, config.get('NCT_ADDRESS'), 18, 'NCT')
         const mco2 = new Token(ChainId.MATIC, config.get('MCO2_ADDRESS'), 18, 'MCO2')
         const usdc = new Token(ChainId.MATIC, config.get('USDC_ADDRESS'), 6, 'USDC')
         const klima = new Token(ChainId.MATIC, config.get('KLIMA_ADDRESS'), 9, 'KLIMA')
         console.log(`USDC: ${usdc.address}`)
         console.log(`KLIMA: ${klima.address}`)
         console.log(`BCT: ${bct.address}`)
+        console.log(`NCT: ${nct.address}`)
         console.log(`MCO2: ${mco2.address}`)
 
         /************************************************
@@ -67,14 +73,18 @@ export default class Arbitragoor {
 
         this.usdcBctAddress = Pair.getAddress(usdc, bct)
         this.klimaBctAddress = Pair.getAddress(klima, bct)
+        this.usdcNctAddress = Pair.getAddress(usdc, nct)
+        this.klimaNctAddress = Pair.getAddress(klima, nct)
         // For some reason the QuickSwap SDK does not return
         // the proper pair address so override here via env variables
         this.usdcMco2Address = config.get('USDC_MCO2_ADDRESS')
         this.klimaMco2Address = config.get('KLIMA_MCO2_ADDRESS')
         this.klimaUsdcAddress = Pair.getAddress(klima, usdc)
         console.log(`USDC/BCT: ${this.usdcBctAddress}`)
-        console.log(`USDC/MCO2: ${this.usdcMco2Address}`)
         console.log(`KLIMA/BCT: ${this.klimaBctAddress}`)
+        console.log(`USDC/NCT: ${this.usdcNctAddress}`)
+        console.log(`KLIMA/NCT: ${this.klimaNctAddress}`)
+        console.log(`USDC/MCO2: ${this.usdcMco2Address}`)
         console.log(`KLIMA/MCO2: ${this.klimaMco2Address}`)
         console.log(`KLIMA/USDC: ${this.klimaUsdcAddress}`)
 
@@ -89,6 +99,9 @@ export default class Arbitragoor {
         // USDC -> BCT -> KLIMA
         const usdcBct = new MulticallContract(this.usdcBctAddress, this.uniPairAbi)
         const klimaBct = new MulticallContract(this.klimaBctAddress, this.uniPairAbi)
+        // USDC -> NCT -> KLIMA
+        const usdcNct = new MulticallContract(this.usdcNctAddress, this.uniPairAbi)
+        const klimaNct = new MulticallContract(this.klimaNctAddress, this.uniPairAbi)
         // USDC -> MCO2 -> KLIMA
         const usdcMco2 = new MulticallContract(this.usdcMco2Address, this.uniPairAbi)
         const klimaMco2 = new MulticallContract(this.klimaMco2Address, this.uniPairAbi)
@@ -102,6 +115,8 @@ export default class Arbitragoor {
             usdcMco2.getReserves(),
             klimaMco2.getReserves(),
             klimaUsdc.getReserves(),
+            usdcNct.getReserves(),
+            klimaNct.getReserves(),
         ]
 
         /************************************************
@@ -144,12 +159,16 @@ export default class Arbitragoor {
         // Initialize booleans used for dynamic token discovery in LP contracts
         const usdcBct = new Contract(this.usdcBctAddress, this.uniPairAbi, this.provider)
         const klimaBct = new Contract(this.klimaBctAddress, this.uniPairAbi, this.provider)
+        const usdcNct = new Contract(this.usdcNctAddress, this.uniPairAbi, this.provider)
+        const klimaNct = new Contract(this.klimaNctAddress, this.uniPairAbi, this.provider)
         const usdcMco2 = new Contract(this.usdcMco2Address, this.uniPairAbi, this.provider)
         const klimaMco2 = new Contract(this.klimaMco2Address, this.uniPairAbi, this.provider)
         this.usdcBctReverse = (await usdcBct.token0()).toLowerCase() != config.get('USDC_ADDRESS').toLowerCase()
         this.usdcMco2Reverse = (await usdcMco2.token0()).toLowerCase() != config.get('USDC_ADDRESS').toLowerCase()
         this.klimaBctReverse = (await klimaBct.token0()).toLowerCase() != config.get('KLIMA_ADDRESS').toLowerCase()
         this.klimaMco2Reverse = (await klimaMco2.token0()).toLowerCase() != config.get('KLIMA_ADDRESS').toLowerCase()
+        this.usdcNctReverse = (await usdcNct.token0()).toLowerCase() != config.get('USDC_ADDRESS').toLowerCase()
+        this.klimaNctReverse = (await klimaNct.token0()).toLowerCase() != config.get('KLIMA_ADDRESS').toLowerCase()
 
         this.isInitialized = true
     }
@@ -181,6 +200,8 @@ export default class Arbitragoor {
                     usdcMco2Reserve,
                     klimaMco2Reserve,
                     klimaUsdcReserve,
+                    usdcNctReserve,
+                    klimaNctReserve,
                 ] = await this.multicallProvider.all(this.calls)
 
                 // USDC -> BCT -> KLIMA
@@ -194,6 +215,20 @@ export default class Arbitragoor {
                     0,
                     this.usdcBctReverse,
                     this.klimaBctReverse,
+                    klimaPools,
+                )
+
+                // USDC -> NCT -> KLIMA
+                checkReserves(
+                    this.usdcToBorrow,
+                    usdcNctReserve,
+                    klimaNctReserve,
+                    config.get('NCT_ADDRESS'),
+                    // This should match the router that supports this path in the contract
+                    // In this case router0 is meant to be the SushiSwap router.
+                    0,
+                    this.usdcNctReverse,
+                    this.klimaNctReverse,
                     klimaPools,
                 )
 
